@@ -1,0 +1,40 @@
+
+### Path settings
+path:
+  expname: spectrum-exp1
+  datadir: data/s23-debug/
+  logdir: logs/s23/
+
+
+### rendering settings
+render:
+  near: 0
+  far: 5
+  n_samples: 64
+
+
+### training settings
+train:
+  lr: 5e-4
+  weight_decay: 5e-4
+  T_max: 10000
+  eta_min: 1e-6
+  batch_size: 8192
+  total_epoches: 500
+  load_ckpt: True
+
+  save_freq: 1
+  val_freq: 2500
+  report_freq: 100
+
+
+### network settings
+networks:
+  D: 8
+  W: 256
+  skips: [4]
+  is_embeded: True
+  multires_pts: 10
+  multires_view: 10
+  multires_tx: 10
+
