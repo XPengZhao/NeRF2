@@ -15,15 +15,15 @@ render:
 
 ### training settings
 train:
-  lr: 5e-4
+  lr: 8e-4
   weight_decay: 5e-4
   T_max: 10000
   eta_min: 1e-6
   batch_size: 8192
-  total_epoches: 500
+  total_iterations: 10000
   load_ckpt: True
 
-  save_freq: 1
+  save_freq: 100
   val_freq: 2500
   report_freq: 100
 
