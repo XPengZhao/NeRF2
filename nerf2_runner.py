@@ -12,15 +12,17 @@ from shutil import copyfile
 import torch
 import torch.optim as optim
 import yaml
+from skimage.metrics import structural_similarity as ssim
 from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
 from dataloader import Spectrum_dataset, split_dataset
-from utils.logger import logger_config
 from model import *
 # from model import NeRF2
 from renderer import Renderer
+from utils.data_painter import paint_spectrum_compare
+from utils.logger import logger_config
 
 
 class NeRF2_Runner():
@@ -81,7 +83,7 @@ class NeRF2_Runner():
         test_set = Spectrum_dataset(self.datadir, test_index)
 
         self.train_iter = DataLoader(train_set, batch_size=self.batch_size, shuffle=True, num_workers=0)
-        self.test_iter = DataLoader(test_set, batch_size=self.batch_size, shuffle=True, num_workers=0)
+        self.test_iter = DataLoader(test_set, batch_size=self.batch_size, shuffle=False, num_workers=0)
         self.logger.info("Train set size:%d, Test set size:%d", len(train_set), len(test_set))
 
 
@@ -147,12 +149,49 @@ class NeRF2_Runner():
                     self.writer.add_scalar('Loss/loss', loss, self.current_iteration)
                     pbar.update(1)
                     pbar.set_description(f"Iteration {self.current_iteration}/{self.total_iterations}")
-                    pbar.set_postfix_str('loss = {:.4f}, lr = {:.6f}'.format(loss.item(), self.optimizer.param_groups[0]['lr']))
+                    pbar.set_postfix_str('loss = {:.6f}, lr = {:.6f}'.format(loss.item(), self.optimizer.param_groups[0]['lr']))
 
 
                     if self.current_iteration % self.save_freq == 0:
                         ckptname = self.save_checkpoint()
                         pbar.write('Saved checkpoints at {}'.format(ckptname))
+
+
+    def eval_network(self):
+        """test the model
+        """
+        self.logger.info("Start evaluation")
+        self.nerf2_network.eval()
+        
+        os.path.makedirs(os.path.join(self.logdir, self.expname, 'pred_spectrum'), exist_ok=True)
+        pred2next, gt2next = torch.zeros((0)), torch.zeros((0))
+        save_img_idx = 0
+        with torch.no_grad():
+            for test_input, test_label in self.test_iter:
+                test_input, test_label = test_input.to(self.devices), test_label.to(self.devices)
+                rays_o, rays_d, tx_o = test_input[:, :3], test_input[:, 3:6], test_input[:, 6:9]
+                pred_spectrum = self.renderer.render_ss(tx_o, rays_o, rays_d)
+                loss = img2me(pred_spectrum, test_label.view(-1))
+                self.logger.info("Mean pixel error = {:.6f}".format(loss.item()))
+
+                ## save predicted spectrum
+                pred_spectrum = pred_spectrum.detach().cpu()
+                gt_spectrum = test_label.detach().cpu()
+                pred_spectrum = torch.concatenate((pred2next, pred_spectrum), dim=0)
+                gt_spectrum = torch.concatenate((gt2next, gt_spectrum), dim=0)
+                num_spectrum = len(pred_spectrum) // (360 * 90)
+                pred2next = pred_spectrum[num_spectrum*360*90:]
+                gt2next = gt_spectrum[num_spectrum*360*90:]
+
+                for i in range(num_spectrum):
+                    pred_sepctrum_i = pred_spectrum[i*360*90:(i+1)*360*90].numpy().reshape(90, 360)
+                    gt_spectrum_i = gt_spectrum[i*360*90:(i+1)*360*90].numpy().reshape(90, 360)
+                    ssim_i = ssim(pred_sepctrum_i, gt_spectrum_i, data_range=1, multichannel=False)
+                    self.logger.info("SSIM = {:.6f}".format(ssim_i))
+                    paint_spectrum_compare(pred_sepctrum_i, gt_spectrum_i,save_path=os.path.join(self.logdir, self.expname,'pred_spectrum', f'{save_img_idx}.png'))
+                    save_img_idx += 1
+
+
 
 
 
@@ -162,7 +201,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default='configs/spectrum.yml', help='config file path')
-    parser.add_argument('--gpu', type=int, default=0)
+    parser.add_argument('--gpu', type=int, default=1)
     parser.add_argument('--mode', type=str, default='train')
     args = parser.parse_args()
     torch.cuda.set_device(args.gpu)
@@ -180,3 +219,5 @@ if __name__ == '__main__':
     worker = NeRF2_Runner(mode=args.mode, **kwargs)
     if args.mode == 'train':
         worker.train()
+    elif args.mode == 'test':
+        worker.eval_network()

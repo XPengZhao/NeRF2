@@ -47,7 +47,7 @@ class Renderer():
 
         # Run network and compute outputs
         raw = self.network_fn(pts, view, tx)    # [batchsize, n_samples, 4]
-        receive_ss = self.raw2outputs(raw, t_vals, rays_d)
+        receive_ss = self.raw2outputs(raw, t_vals, rays_d)  # [batchsize]
 
         return receive_ss
 
