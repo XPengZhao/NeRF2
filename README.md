@@ -1,4 +1,4 @@
-# NeRF $^\textsf{2}$ : Neural Radio-Frequency Radiance Fields
+# NeRF<sup>2</sup>: Neural Radio-Frequency Radiance Fields
 
 Thank you for your interest in our work. We're excited to announce that we will gradually release the code and dataset for this project.
 
