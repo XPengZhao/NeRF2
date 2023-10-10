@@ -56,18 +56,23 @@
             <div class="is-size-5 publication-authors">
               <!-- Paper authors -->
               <span class="author-block">
-                <a href="https://xpengzhao.github.io" target="_blank">Xiaopeng Zhao</a>,</span>
-                <span class="author-block">
-                  <a href="https://anplus.github.io/" target="_blank">Zhenlin An</a>,</span>
-                  <span class="author-block">
-                    <a href="THIRD AUTHOR PERSONAL LINK" target="_blank">Qingrui Pan</a>,</span>
-                    <span class="author-block">
-                      <a href="http://young.tagsys.org" target="_blank">Lei Yang</a>
-                  </span>
-                  </div>
-
+                <a href="https://xpengzhao.github.io" target="_blank">Xiaopeng Zhao</a>,
+              </span>
+              <span class="author-block">
+                <a href="https://anplus.github.io/" target="_blank">Zhenlin An<sup>*</sup></a>,
+              </span>
+              <span class="author-block">
+                <a href="https://panqingrui.github.io/homepage/" target="_blank">Qingrui Pan</a>,
+              </span>
+              <span class="author-block">
+                  <a href="http://young.tagsys.org" target="_blank">Lei Yang<sup>*</sup></a>
+              </span>
+            </div>
+            <span class="author-block">
+              (* The corresponding author)
+            </span>
                   <div class="is-size-5 publication-authors">
-                    <span class="author-block">The Hong Kong Polytechnic University<br>MobiCom 2023</span>
+                    <span class="author-block">The Hong Kong Polytechnic University<br>ACM MobiCom 2023</span>
                     <!-- <span class="eql-cntrb"><small><br><sup>*</sup>Indicates Equal Contribution</small></span> -->
                   </div>
 
@@ -75,7 +80,7 @@
                     <div class="publication-links">
                          <!-- Arxiv PDF link -->
                       <span class="link-block">
-                        <a href="https://arxiv.org/abs/2305.06118" target="_blank"
+                        <a href="https://dl.acm.org/doi/10.1145/3570361.3592527" target="_blank"
                         class="external-link button is-normal is-rounded is-dark">
                         <span class="icon">
                           <i class="fas fa-file-pdf"></i>
@@ -107,15 +112,15 @@
                 </span>
 
                 <!-- ArXiv abstract Link -->
-                <span class="link-block">
+                <!-- <span class="link-block">
                   <a href="https://arxiv.org/abs/2305.06118" target="_blank"
                   class="external-link button is-normal is-rounded is-dark">
                   <span class="icon">
                     <i class="ai ai-arxiv"></i>
                   </span>
                   <span>arXiv</span>
-                </a>
-              </span>
+                  </a>
+                </span> -->
             </div>
           </div>
         </div>
@@ -278,9 +283,15 @@
 
 <!--BibTex citation -->
   <section class="section" id="BibTeX">
-    <div class="container is-max-desktop content">
+    <div class="container is-max-desktop content" style="position: relative;">
+      <button style="position: absolute; top: 30%; right: 1%;" onclick="copyCode()">Copy</button>
       <h2 class="title">BibTeX</h2>
-      <pre><code>BibTex Code Here</code></pre>
+      <pre><code>@inproceedings{zhao2023nerf2,
+    author = {Zhao, Xiaopeng and An, Zhenlin and Pan, Qingrui and Yang, Lei},
+    title = {NeRF2: Neural Radio-Frequency Radiance Fields},
+    booktitle = {Proc. of ACM MobiCom '23},
+    pages = {1--15},
+    year = {2023}}</code></pre>
     </div>
 </section>
 <!--End BibTex citation -->
