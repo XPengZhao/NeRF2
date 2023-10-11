@@ -9,6 +9,7 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 import argparse
 from shutil import copyfile
 
+import numpy as np
 import torch
 import torch.optim as optim
 import yaml
@@ -44,7 +45,7 @@ class NeRF2_Runner():
         ## Logger
         log_filename = "logger.log"
         log_savepath = os.path.join(self.logdir, self.expname, log_filename)
-        self.logger = logger_config(log_savepath=log_savepath, logging_name='locgpt')
+        self.logger = logger_config(log_savepath=log_savepath, logging_name='nerf2')
         self.logger.info("expname:%s, datadir:%s, logdir:%s", self.expname, self.datadir, self.logdir)
         self.writer = SummaryWriter(os.path.join(self.logdir, self.expname, 'tensorboard'))
 
@@ -151,7 +152,6 @@ class NeRF2_Runner():
                     pbar.set_description(f"Iteration {self.current_iteration}/{self.total_iterations}")
                     pbar.set_postfix_str('loss = {:.6f}, lr = {:.6f}'.format(loss.item(), self.optimizer.param_groups[0]['lr']))
 
-
                     if self.current_iteration % self.save_freq == 0:
                         ckptname = self.save_checkpoint()
                         pbar.write('Saved checkpoints at {}'.format(ckptname))
@@ -162,17 +162,17 @@ class NeRF2_Runner():
         """
         self.logger.info("Start evaluation")
         self.nerf2_network.eval()
-        
-        os.path.makedirs(os.path.join(self.logdir, self.expname, 'pred_spectrum'), exist_ok=True)
+
+        os.makedirs(os.path.join(self.logdir, self.expname, 'pred_spectrum'), exist_ok=True)
         pred2next, gt2next = torch.zeros((0)), torch.zeros((0))
         save_img_idx = 0
+        all_ssim = []
         with torch.no_grad():
             for test_input, test_label in self.test_iter:
                 test_input, test_label = test_input.to(self.devices), test_label.to(self.devices)
                 rays_o, rays_d, tx_o = test_input[:, :3], test_input[:, 3:6], test_input[:, 6:9]
                 pred_spectrum = self.renderer.render_ss(tx_o, rays_o, rays_d)
-                loss = img2me(pred_spectrum, test_label.view(-1))
-                self.logger.info("Mean pixel error = {:.6f}".format(loss.item()))
+
 
                 ## save predicted spectrum
                 pred_spectrum = pred_spectrum.detach().cpu()
@@ -186,10 +186,14 @@ class NeRF2_Runner():
                 for i in range(num_spectrum):
                     pred_sepctrum_i = pred_spectrum[i*360*90:(i+1)*360*90].numpy().reshape(90, 360)
                     gt_spectrum_i = gt_spectrum[i*360*90:(i+1)*360*90].numpy().reshape(90, 360)
+                    pixel_error = np.mean(abs(pred_sepctrum_i - gt_spectrum_i))
                     ssim_i = ssim(pred_sepctrum_i, gt_spectrum_i, data_range=1, multichannel=False)
-                    self.logger.info("SSIM = {:.6f}".format(ssim_i))
+                    self.logger.info("Spectrum {:d}, Mean pixel error = {:.6f}; SSIM = {:.6f}".format(save_img_idx, pixel_error, ssim_i))
                     paint_spectrum_compare(pred_sepctrum_i, gt_spectrum_i,save_path=os.path.join(self.logdir, self.expname,'pred_spectrum', f'{save_img_idx}.png'))
+                    all_ssim.append(ssim_i)
+                    self.logger.info("Median SSIM is {:.6f}".format(np.median(all_ssim)))
                     save_img_idx += 1
+                    np.savetxt(os.path.join(self.logdir, self.expname, 'all_ssim.txt'), all_ssim, fmt='%.4f')
 
 
 
