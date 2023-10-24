@@ -1,25 +1,27 @@
 
 ### Path settings
 path:
-  expname: spectrum-exp1
-  datadir: data/s23-debug/
-  logdir: logs/s23/
+  expname: ble-rssi-exp1
+  datadir: data/BLE/exp1/
+  logdir: logs/BLE/
 
 
 ### rendering settings
 render:
+  mode: 'rssi'
   near: 0
-  far: 5
-  n_samples: 64
+  far: 1
+  n_samples: 32
+  scale_worldsize: 60  # 60m x 60m, normalize the coordinates to [0, 1]
 
 
 ### training settings
 train:
-  lr: 8e-4
-  weight_decay: 5e-4
+  lr: 1e-3
+  weight_decay: 5e-5
   T_max: 10000
   eta_min: 1e-6
-  batch_size: 8192
+  batch_size: 128
   total_iterations: 10000
   load_ckpt: True
 

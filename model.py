@@ -8,8 +8,7 @@ import torch.nn.functional as F
 # Misc
 img2mse = lambda x, y : torch.mean((x - y) ** 2)
 img2me = lambda x, y : torch.mean(abs(x - y))
-sig2mse = lambda x, y: torch.mean(abs(x - y))
-
+sig2mse = lambda x, y : torch.mean((x - y) ** 2)
 
 class Embedder():
     """positional encoding
@@ -70,7 +69,7 @@ def get_embedder(multires, is_embeded=True, input_dims=3):
         return nn.Identity(), input_dims
 
     embed_kwargs = {
-                'include_input' : True,
+                'include_input' : False,
                 'input_dims' : input_dims,
                 'max_freq_log2' : multires-1,
                 'num_freqs' : multires,
@@ -142,9 +141,13 @@ class NeRF2(nn.Module):
         """
 
         # position encoding
-        pts = self.embed_pts_fn(pts)
-        view = self.embed_view_fn(view)
-        tx = self.embed_tx_fn(tx)
+        pts = self.embed_pts_fn(pts).contiguous()
+        view = self.embed_view_fn(view).contiguous()
+        tx = self.embed_tx_fn(tx).contiguous()
+        shape = list(pts.shape)
+        pts = pts.view(-1, shape[-1])
+        view = view.view(-1, shape[-1])
+        tx = tx.view(-1, shape[-1])
 
         x = pts
         for i, layer in enumerate(self.attenuation_linears):
@@ -160,5 +163,5 @@ class NeRF2(nn.Module):
             x = F.relu(layer(x))
         signal = self.signal_output(x)    #[batchsize, n_samples, 2]
 
-        outputs = torch.cat([attn, signal], -1)    # [batchsize, n_samples, 4]
-        return outputs
+        outputs = torch.cat([attn, signal], -1).contiguous()    # [batchsize, n_samples, 4]
+        return outputs.view(shape[:-1]+[4])

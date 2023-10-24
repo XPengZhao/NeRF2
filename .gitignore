@@ -4,3 +4,4 @@ data/
 datatools/
 __pycache__/
 .vscode/
+scripts/

@@ -18,23 +18,22 @@ from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
-from dataloader import Spectrum_dataset, split_dataset
+from dataloader import *
 from model import *
-# from model import NeRF2
-from renderer import Renderer
+from renderer import renderer_dict
 from utils.data_painter import paint_spectrum_compare
 from utils.logger import logger_config
 
 
 class NeRF2_Runner():
 
-    def __init__(self, mode, **kwargs) -> None:
-
+    def __init__(self, mode, dataset, **kwargs) -> None:
 
         kwargs_path = kwargs['path']
         kwargs_render = kwargs['render']
         kwargs_network = kwargs['networks']
         kwargs_train = kwargs['train']
+        self.dataset = dataset
 
         ## Path settings
         self.expname = kwargs_path['expname']
@@ -60,11 +59,14 @@ class NeRF2_Runner():
                                                                         T_max=float(kwargs_train['T_max']), eta_min=float(kwargs_train['eta_min']),
                                                                         last_epoch=-1)
 
-        self.renderer = Renderer(networks_fn=self.nerf2_network, **kwargs_render)
+        ## Renderer
+        renderer = renderer_dict[kwargs_render['mode']]
+        self.renderer = renderer(networks_fn=self.nerf2_network, **kwargs_render)
+        self.scale_worldsize = kwargs_render['scale_worldsize']
 
+        ## Print total number of parameters
         total_params = sum(p.numel() for p in params if p.requires_grad)
         self.logger.info("Total number of parameters: %s", total_params)
-
 
         ## Train Settings
         self.current_iteration = 1
@@ -74,14 +76,16 @@ class NeRF2_Runner():
         self.total_iterations = kwargs_train['total_iterations']
         self.save_freq = kwargs_train['save_freq']
 
-
         ## Dataset
+        dataset = dataset_dict[dataset]
         train_index = os.path.join(self.datadir, "train_index.txt")
         test_index = os.path.join(self.datadir, "test_index.txt")
         if not os.path.exists(train_index) or not os.path.exists(test_index):
-            split_dataset(self.datadir, ratio=0.8)
-        train_set = Spectrum_dataset(self.datadir, train_index)
-        test_set = Spectrum_dataset(self.datadir, test_index)
+            split_dataset(self.datadir, ratio=0.8, dataset=dataset)
+        self.logger.info("Loading training set...")
+        train_set = dataset(self.datadir, train_index, self.scale_worldsize)
+        self.logger.info("Loading test set...")
+        test_set = dataset(self.datadir, test_index, self.scale_worldsize)
 
         self.train_iter = DataLoader(train_set, batch_size=self.batch_size, shuffle=True, num_workers=0)
         self.test_iter = DataLoader(test_set, batch_size=self.batch_size, shuffle=False, num_workers=0)
@@ -121,7 +125,6 @@ class NeRF2_Runner():
             'optimizer_state_dict': self.optimizer.state_dict(),
             'scheduler_state_dict': self.cosine_scheduler.state_dict()
         }, ckptname)
-        # self.logger.info('Saved checkpoints at %s', ckptname)
         return ckptname
 
 
@@ -137,10 +140,15 @@ class NeRF2_Runner():
                         break
 
                     train_input, train_label = train_input.to(self.devices), train_label.to(self.devices)
-                    rays_o, rays_d, tx_o = train_input[:, :3], train_input[:, 3:6], train_input[:, 6:9]
-                    predict_spectrum = self.renderer.render_ss(tx_o, rays_o, rays_d)
+                    if self.dataset == "rfid":
+                        rays_o, rays_d, tx_o = train_input[:, :3], train_input[:, 3:6], train_input[:, 6:9]
+                        predict_spectrum = self.renderer.render_ss(tx_o, rays_o, rays_d)
+                        loss = img2mse(predict_spectrum, train_label.view(-1))
+                    elif self.dataset == 'ble':
+                        tx_o, rays_o, rays_d = train_input[:, :3], train_input[:, 3:6], train_input[:, 6:]
+                        predict_rssi = self.renderer.render_rssi(tx_o, rays_o, rays_d)
+                        loss = img2mse(predict_rssi, train_label.view(-1))
 
-                    loss = img2mse(predict_spectrum, train_label.view(-1))
                     self.optimizer.zero_grad()
                     loss.backward()
                     self.optimizer.step()
@@ -157,7 +165,8 @@ class NeRF2_Runner():
                         pbar.write('Saved checkpoints at {}'.format(ckptname))
 
 
-    def eval_network(self):
+
+    def eval_network_spectrum(self):
         """test the model
         """
         self.logger.info("Start evaluation")
@@ -198,15 +207,43 @@ class NeRF2_Runner():
 
 
 
+    def eval_network_rssi(self):
+        """test the model and save predicted RSSI values to a file
+        """
+        self.logger.info("Start evaluation")
+        self.nerf2_network.eval()
+
+        with torch.no_grad():
+            with open(os.path.join(self.logdir, "result.txt"), 'w') as f:
+                for test_input, test_label in self.test_iter:
+                    test_input, test_label = test_input.to(self.devices), test_label.to(self.devices)
+                    tx_o, rays_o, rays_d = test_input[:, :3], test_input[:, 3:6], test_input[:, 6:]
+                    predict_rssi = self.renderer.render_rssi(tx_o, rays_o, rays_d)
+
+                    ## save predicted spectrum
+                    predict_rssi = amplitude2rssi(predict_rssi.detach().cpu())
+                    gt_rssi = amplitude2rssi(test_label.detach().cpu())
+
+                    error = abs(predict_rssi - gt_rssi.reshape(-1))
+                    self.logger.info("Median error:%.2f", torch.median(error))
+
+                    # write predicted RSSI values to file
+                    for i, rssi in enumerate(predict_rssi):
+                        f.write("{:.2f}, {:.2f}".format(gt_rssi[i].item(), rssi.item()) + '\n')
+
+        result = np.loadtxt(os.path.join(self.logdir, "result.txt"), delimiter=",")
+        self.logger.info("Total Median error:%.2f", np.median(abs(result[:,0] - result[:,1])))
+
 
 
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default='configs/spectrum.yml', help='config file path')
-    parser.add_argument('--gpu', type=int, default=1)
+    parser.add_argument('--config', type=str, default='configs/rfid-spectrum.yml', help='config file path')
+    parser.add_argument('--gpu', type=int, default=0)
     parser.add_argument('--mode', type=str, default='train')
+    parser.add_argument('--dataset', type=str, default='rfid')
     args = parser.parse_args()
     torch.cuda.set_device(args.gpu)
 
@@ -220,8 +257,11 @@ if __name__ == '__main__':
         os.makedirs(logdir, exist_ok=True)
         copyfile(args.config, os.path.join(logdir,'config.yml'))
 
-    worker = NeRF2_Runner(mode=args.mode, **kwargs)
+    worker = NeRF2_Runner(mode=args.mode, dataset=args.dataset, **kwargs)
     if args.mode == 'train':
         worker.train()
     elif args.mode == 'test':
-        worker.eval_network()
+        if args.dataset == 'rfid':
+            worker.eval_network_spectrum()
+        elif args.dataset == 'ble':
+            worker.eval_network_rssi()

@@ -16,9 +16,9 @@ dependencies:
   - scipy=1.10.1
   - tensorboardx=2.2
   - torchvision=0.15.2
-  - tqdm=4.65.0
-  - yaml=0.2.5
+  - tqdm
+  - yaml
   - pip:
-      - einops==0.6.1
-      - imageio==2.31.1
-      - scikit-image==0.21.0
+      - einops
+      - imageio
+      - scikit-image
