@@ -6,25 +6,54 @@ Thank you for your interest in our work. We're excited to announce that we will 
 
 ## Datasets
 
+### RFID spectrum prediction
+
 Datasets and pretrained models are available at [Here](https://connectpolyu-my.sharepoint.com/:f:/g/personal/20032132r_connect_polyu_hk/EuAACSdRP4VGgw_9n2IqL84BkY_tWD5TeE9kDT0lvjw6jw?e=ygYEvX).
 
+
+
+### BLE RSSI prediction
+
+Datasets and pretrained models are available at [Here](https://connectpolyu-my.sharepoint.com/:f:/g/personal/20032132r_connect_polyu_hk/EuAACSdRP4VGgw_9n2IqL84BkY_tWD5TeE9kDT0lvjw6jw?e=ygYEvX).
 
 
 
 ## Running
 
-### Training the model
+### Spectrum prediction
+
+**training the model**
 
 ```bash
-python nerf2_runner.py --mode train --config configs/spectrum.yml --gpu 0
+python nerf2_runner.py --mode train --config configs/rfid-spectrum.yml --dataset_type rfid --gpu 0
+```
+
+**Inference the model**
+
+```bash
+python nerf2_runner.py --mode test --config configs/rfid-spectrum.yml --dataset_type rfid --gpu 0
 ```
 
 
 
-### Inference the model
+### RSSI prediction
+
+**training the model**
 
 ```bash
-python nerf2_runner.py --mode test --config configs/spectrum.yml --gpu 0
+python nerf2_runner.py --mode train --config configs/ble-rssi.yml --dataset_type ble --gpu 0
+```
+
+**Inference the model**
+
+```bash
+python nerf2_runner.py --mode test --config configs/ble-rssi.yml --dataset_type ble --gpu 0
+```
+
+**MRI**
+
+```python
+python baseline/mri.py
 ```
 
 
@@ -32,9 +61,10 @@ python nerf2_runner.py --mode test --config configs/spectrum.yml --gpu 0
 ## To-Do List
 
 - [ ] NeRF2 for FDD MIMO channel prediction
+- [ ] CGAN RSSI prediction baseline
 - [ ] Release more datasets
 - [ ] Instruction of preparing own datasets
-- [ ] Pytorch Distributed training to speed up the code
+- [ ] Implementation on Taichi to speed up the code
 
 
 
