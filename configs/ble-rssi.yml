@@ -2,7 +2,7 @@
 ### Path settings
 path:
   expname: ble-rssi-exp1
-  datadir: data/BLE/exp1/
+  datadir: data/BLE/
   logdir: logs/BLE/
 
 
@@ -22,7 +22,7 @@ train:
   T_max: 10000
   eta_min: 1e-6
   batch_size: 128
-  total_iterations: 10000
+  total_iterations: 30000
   load_ckpt: True
 
   save_freq: 100

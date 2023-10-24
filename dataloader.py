@@ -39,15 +39,15 @@ def amplitude2rssi(amplitude):
     return -100 * (1 - amplitude)
 
 
-def split_dataset(datadir, ratio=0.8, dataset='rfid'):
+def split_dataset(datadir, ratio=0.8, dataset_type='rfid'):
     """random shuffle train/test set
     """
-    if dataset == "rfid":
+    if dataset_type == "rfid":
         spectrum_dir = os.path.join(datadir, 'spectrum')
         spt_names = sorted([f for f in os.listdir(spectrum_dir) if f.endswith('.png')])
         index = [x.split('.')[0] for x in spt_names]
         random.shuffle(index)
-    elif dataset == "ble":
+    elif dataset_type == "ble":
         rssi_dir = os.path.join(datadir, 'gateway_rssi.csv')
         index = pd.read_csv(rssi_dir).index.values
         random.shuffle(index)

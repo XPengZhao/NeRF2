@@ -27,13 +27,13 @@ from utils.logger import logger_config
 
 class NeRF2_Runner():
 
-    def __init__(self, mode, dataset, **kwargs) -> None:
+    def __init__(self, mode, dataset_type, **kwargs) -> None:
 
         kwargs_path = kwargs['path']
         kwargs_render = kwargs['render']
         kwargs_network = kwargs['networks']
         kwargs_train = kwargs['train']
-        self.dataset = dataset
+        self.dataset_type = dataset_type
 
         ## Path settings
         self.expname = kwargs_path['expname']
@@ -77,11 +77,11 @@ class NeRF2_Runner():
         self.save_freq = kwargs_train['save_freq']
 
         ## Dataset
-        dataset = dataset_dict[dataset]
+        dataset = dataset_dict[dataset_type]
         train_index = os.path.join(self.datadir, "train_index.txt")
         test_index = os.path.join(self.datadir, "test_index.txt")
         if not os.path.exists(train_index) or not os.path.exists(test_index):
-            split_dataset(self.datadir, ratio=0.8, dataset=dataset)
+            split_dataset(self.datadir, ratio=0.8, dataset_type=dataset_type)
         self.logger.info("Loading training set...")
         train_set = dataset(self.datadir, train_index, self.scale_worldsize)
         self.logger.info("Loading test set...")
@@ -140,11 +140,11 @@ class NeRF2_Runner():
                         break
 
                     train_input, train_label = train_input.to(self.devices), train_label.to(self.devices)
-                    if self.dataset == "rfid":
+                    if self.dataset_type == "rfid":
                         rays_o, rays_d, tx_o = train_input[:, :3], train_input[:, 3:6], train_input[:, 6:9]
                         predict_spectrum = self.renderer.render_ss(tx_o, rays_o, rays_d)
                         loss = img2mse(predict_spectrum, train_label.view(-1))
-                    elif self.dataset == 'ble':
+                    elif self.dataset_type == 'ble':
                         tx_o, rays_o, rays_d = train_input[:, :3], train_input[:, 3:6], train_input[:, 6:]
                         predict_rssi = self.renderer.render_rssi(tx_o, rays_o, rays_d)
                         loss = img2mse(predict_rssi, train_label.view(-1))
@@ -214,7 +214,7 @@ class NeRF2_Runner():
         self.nerf2_network.eval()
 
         with torch.no_grad():
-            with open(os.path.join(self.logdir, "result.txt"), 'w') as f:
+            with open(os.path.join(self.logdir, self.expname, "result.txt"), 'w') as f:
                 for test_input, test_label in self.test_iter:
                     test_input, test_label = test_input.to(self.devices), test_label.to(self.devices)
                     tx_o, rays_o, rays_d = test_input[:, :3], test_input[:, 3:6], test_input[:, 6:]
@@ -231,7 +231,7 @@ class NeRF2_Runner():
                     for i, rssi in enumerate(predict_rssi):
                         f.write("{:.2f}, {:.2f}".format(gt_rssi[i].item(), rssi.item()) + '\n')
 
-        result = np.loadtxt(os.path.join(self.logdir, "result.txt"), delimiter=",")
+        result = np.loadtxt(os.path.join(self.logdir,self.expname, "result.txt"), delimiter=",")
         self.logger.info("Total Median error:%.2f", np.median(abs(result[:,0] - result[:,1])))
 
 
@@ -240,10 +240,10 @@ class NeRF2_Runner():
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default='configs/rfid-spectrum.yml', help='config file path')
+    parser.add_argument('--config', type=str, default='configs/ble-rssi.yml', help='config file path')
     parser.add_argument('--gpu', type=int, default=0)
     parser.add_argument('--mode', type=str, default='train')
-    parser.add_argument('--dataset', type=str, default='rfid')
+    parser.add_argument('--dataset_type', type=str, default='ble')
     args = parser.parse_args()
     torch.cuda.set_device(args.gpu)
 
@@ -257,11 +257,11 @@ if __name__ == '__main__':
         os.makedirs(logdir, exist_ok=True)
         copyfile(args.config, os.path.join(logdir,'config.yml'))
 
-    worker = NeRF2_Runner(mode=args.mode, dataset=args.dataset, **kwargs)
+    worker = NeRF2_Runner(mode=args.mode, dataset_type=args.dataset_type, **kwargs)
     if args.mode == 'train':
         worker.train()
     elif args.mode == 'test':
-        if args.dataset == 'rfid':
+        if args.dataset_type == 'rfid':
             worker.eval_network_spectrum()
-        elif args.dataset == 'ble':
+        elif args.dataset_type == 'ble':
             worker.eval_network_rssi()
