@@ -67,11 +67,26 @@ python baseline/mri.py
 - [ ] Implementation on Taichi to speed up the code
 
 
-
-
 Please stay tuned for updates and feel free to reach out if you have any questions or need further information.
 
 
+## License
+
+NeRF<sup>2</sup> is MIT-licensed. The license applies to the pre-trained models and datasets as well.
+
+## Citation
+
+If you find the repository is helpful to your project, please cite as follows:
+
+```bibtex
+@inproceedings{zhao2023nerf2,
+    author = {Zhao, Xiaopeng and An, Zhenlin and Pan, Qingrui and Yang, Lei},
+    title = {NeRF2: Neural Radio-Frequency Radiance Fields},
+    booktitle = {Proc. of ACM MobiCom '23},
+    pages = {1--15},
+    year = {2023}
+}
+```
 
 ## Acknowledgment
 
