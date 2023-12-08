@@ -1,14 +1,29 @@
 # NeRF<sup>2</sup>: Neural Radio-Frequency Radiance Fields
 
-Thank you for your interest in our work. We're excited to announce that we will gradually release the code and dataset for this project.
+Thank you for your interest in our work. This repository maintains code for NeRF<sup>2</sup>, recognized as the Best Paper Runner-Up at ACM MobiCom 2023. NeRF<sup>2</sup> is an advanced physical-layer neural network capable of accurately predicting signal characteristics at any location based on the position of a transmitter. By integrating learned statistical models with physical ray tracing, NeRF<sup>2</sup> creates synthetic datasets ideal for training application-layer neural networks. This technology also demonstrates significant potential in indoor localization and 5G MIMO channel prediction, representing a major advancement in wireless communication and AI integration.
 
+![NeRF2 Example](https://github.com/XPengZhao/NeRF2/blob/gh-pages/static/images/spt-predict.jpg?raw=true)
 
-
-## Datasets
+## [Project](https://xpengzhao.github.io/NeRF2/) | [Paper](https://dl.acm.org/doi/10.1145/3570361.3592527) | Datasets
 
 ### RFID spectrum / BLE / MIMO  prediction
 
 Datasets and pretrained models are available at [Here](https://connectpolyu-my.sharepoint.com/:f:/g/personal/20032132r_connect_polyu_hk/EuAACSdRP4VGgw_9n2IqL84BkY_tWD5TeE9kDT0lvjw6jw?e=ygYEvX).
+
+The datasets are organized as follows:
+
+```text
+NeRF2-Dataset
+|-- BLE   # BLE RSSI Prediction Dataset
+    |-- rssi-ckpts-1.tar         # pretrained model
+    |-- rssi-dataset-1.tar.gz    # rssi dataset
+|-- MIMO   # MIMO CSI Prediction Dataset
+    |-- csi-ckpts-1.tar          # pretrained model
+    |-- csi-dataset-1.tar.gz     # csi dataset
+|-- RFID   # RFID Spectrum Prediction Dataset
+    |-- s23-ckpts.tar            # pretrained model
+    |-- s23-dataset.tar.gz       # spectrum dataset
+```
 
 
 ## Running
