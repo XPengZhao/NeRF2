@@ -6,19 +6,9 @@ Thank you for your interest in our work. We're excited to announce that we will 
 
 ## Datasets
 
-### RFID spectrum prediction
+### RFID spectrum / BLE / MIMO  prediction
 
 Datasets and pretrained models are available at [Here](https://connectpolyu-my.sharepoint.com/:f:/g/personal/20032132r_connect_polyu_hk/EuAACSdRP4VGgw_9n2IqL84BkY_tWD5TeE9kDT0lvjw6jw?e=ygYEvX).
-
-
-
-### BLE RSSI prediction
-
-Datasets and pretrained models are available at [Here](https://connectpolyu-my.sharepoint.com/:f:/g/personal/20032132r_connect_polyu_hk/EuAACSdRP4VGgw_9n2IqL84BkY_tWD5TeE9kDT0lvjw6jw?e=ygYEvX).
-
-### MIMO CSI prediction
-
-Datasets and pretrained models are available at [Here](https://connectpolyu-my.sharepoint.com/:f:/g/personal/20032132r_connect_polyu_hk/EtAwvdaAdydKtXQCsiTPVfcBQcHuXIz8WWNsnuFULBD0CA?e=eKcins)
 
 
 ## Running
