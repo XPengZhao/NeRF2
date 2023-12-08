@@ -1,6 +1,6 @@
 # NeRF<sup>2</sup>: Neural Radio-Frequency Radiance Fields
 
-Thank you for your interest in our work. This repository maintains code for NeRF<sup>2</sup>, recognized as the Best Paper Runner-Up at ACM MobiCom 2023. NeRF<sup>2</sup> is an advanced physical-layer neural network capable of accurately predicting signal characteristics at any location based on the position of a transmitter. By integrating learned statistical models with physical ray tracing, NeRF<sup>2</sup> creates synthetic datasets ideal for training application-layer neural networks. This technology also demonstrates significant potential in indoor localization and 5G MIMO channel prediction, representing a major advancement in wireless communication and AI integration.
+Thank you for your interest in our work. This repository maintains code for NeRF<sup>2</sup>, recognized as the Best Paper Runner-Up at ACM MobiCom 2023. NeRF<sup>2</sup> is a physical-layer neural network capable of accurately predicting signal characteristics at any location based on the position of a transmitter. By integrating learned statistical models with physical ray tracing, NeRF<sup>2</sup> creates synthetic datasets ideal for training application-layer neural networks. This technology also demonstrates potential in indoor localization and 5G MIMO channel prediction, showcasing an fusion of wireless communication and AI.
 
 ![NeRF2 Example](https://github.com/XPengZhao/NeRF2/blob/gh-pages/static/images/spt-predict.jpg?raw=true)
 
