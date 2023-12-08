@@ -4,11 +4,19 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from einops import rearrange
 
 # Misc
 img2mse = lambda x, y : torch.mean((x - y) ** 2)
 img2me = lambda x, y : torch.mean(abs(x - y))
 sig2mse = lambda x, y : torch.mean((x - y) ** 2)
+csi2snr = lambda x, y: -10 * torch.log10(
+    torch.norm(x - y, dim=(1, 2)) ** 2 /
+    torch.norm(y, dim=(1, 2)) ** 2
+)
+
+
+
 
 class Embedder():
     """positional encoding
@@ -85,27 +93,32 @@ def get_embedder(multires, is_embeded=True, input_dims=3):
 
 class NeRF2(nn.Module):
 
-    def __init__(self, D=8, W=256, multires_pts=10, multires_view=10, multires_tx=10, skips=[4], is_embeded=True):
+    def __init__(self, D=8, W=256, skips=[4],
+                 input_dims={'pts':3, 'view':3, 'tx':3},
+                 multires = {'pts':10, 'view':10, 'tx':10},
+                 is_embeded={'pts':True, 'view':True, 'tx':False},
+                 attn_output_dims=2, sig_output_dims=2):
         """NeRF2 model
 
         Parameters
         ----------
         D : int, hidden layer number, default by 8
         W : int, Dimension per hidden layer, default by 256
-        multires_pts : int, the layer number of positional encoding for position in the scene
-        multires_view : int, the layer number of positional encoding for view direction
-        multires_tx : int, the layer number of positional encoding for transmitter position
         skip : list, skip layer index
-        is_embeded : bool, whether to use positional encoding
+        input_dims: dict, input dimensions
+        multires: dict, log2 of max freq for position, view, and tx position positional encoding, i.e., (L-1)
+        is_embeded : dict, whether to use positional encoding
+        attn_output_dims : int, output dimension of attenuation
+        sig_output_dims : int, output dimension of signal
         """
 
         super().__init__()
         self.skips = skips
 
         # set positional encoding function
-        self.embed_pts_fn, input_pts_dim = get_embedder(multires_pts, is_embeded)
-        self.embed_view_fn, input_view_dim = get_embedder(multires_view, is_embeded)
-        self.embed_tx_fn, input_tx_dim = get_embedder(multires_tx, is_embeded)
+        self.embed_pts_fn, input_pts_dim = get_embedder(multires['pts'], is_embeded['pts'], input_dims['pts'])
+        self.embed_view_fn, input_view_dim = get_embedder(multires['view'], is_embeded['view'], input_dims['view'])
+        self.embed_tx_fn, input_tx_dim = get_embedder(multires['tx'], is_embeded['tx'], input_dims['tx'])
 
         ## attenuation network
         self.attenuation_linears = nn.ModuleList(
@@ -121,9 +134,9 @@ class NeRF2(nn.Module):
         )
 
         ## output head, 2 for amplitude and phase
-        self.attenuation_output = nn.Linear(W, 2)
+        self.attenuation_output = nn.Linear(W, attn_output_dims)
         self.feature_layer = nn.Linear(W, W)
-        self.signal_output = nn.Linear(W//2, 2)
+        self.signal_output = nn.Linear(W//2, sig_output_dims)
 
 
     def forward(self, pts, view, tx):
@@ -144,10 +157,10 @@ class NeRF2(nn.Module):
         pts = self.embed_pts_fn(pts).contiguous()
         view = self.embed_view_fn(view).contiguous()
         tx = self.embed_tx_fn(tx).contiguous()
-        shape = list(pts.shape)
-        pts = pts.view(-1, shape[-1])
-        view = view.view(-1, shape[-1])
-        tx = tx.view(-1, shape[-1])
+        shape = pts.shape
+        pts = pts.view(-1, list(pts.shape)[-1])
+        view = view.view(-1, list(view.shape)[-1])
+        tx = tx.view(-1, list(tx.shape)[-1])
 
         x = pts
         for i, layer in enumerate(self.attenuation_linears):
@@ -164,4 +177,4 @@ class NeRF2(nn.Module):
         signal = self.signal_output(x)    #[batchsize, n_samples, 2]
 
         outputs = torch.cat([attn, signal], -1).contiguous()    # [batchsize, n_samples, 4]
-        return outputs.view(shape[:-1]+[4])
+        return outputs.view(shape[:-1]+outputs.shape[-1:])

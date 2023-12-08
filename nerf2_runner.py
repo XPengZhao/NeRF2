@@ -17,6 +17,7 @@ from skimage.metrics import structural_similarity as ssim
 from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
+import scipy.io as scio
 
 from dataloader import *
 from model import *
@@ -83,13 +84,13 @@ class NeRF2_Runner():
         if not os.path.exists(train_index) or not os.path.exists(test_index):
             split_dataset(self.datadir, ratio=0.8, dataset_type=dataset_type)
         self.logger.info("Loading training set...")
-        train_set = dataset(self.datadir, train_index, self.scale_worldsize)
+        self.train_set = dataset(self.datadir, train_index, self.scale_worldsize)
         self.logger.info("Loading test set...")
-        test_set = dataset(self.datadir, test_index, self.scale_worldsize)
+        self.test_set = dataset(self.datadir, test_index, self.scale_worldsize)
 
-        self.train_iter = DataLoader(train_set, batch_size=self.batch_size, shuffle=True, num_workers=0)
-        self.test_iter = DataLoader(test_set, batch_size=self.batch_size, shuffle=False, num_workers=0)
-        self.logger.info("Train set size:%d, Test set size:%d", len(train_set), len(test_set))
+        self.train_iter = DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True, num_workers=0)
+        self.test_iter = DataLoader(self.test_set, batch_size=self.batch_size, shuffle=False, num_workers=0)
+        self.logger.info("Train set size:%d, Test set size:%d", len(self.train_set), len(self.test_set))
 
 
     def load_checkpoints(self):
@@ -148,6 +149,11 @@ class NeRF2_Runner():
                         tx_o, rays_o, rays_d = train_input[:, :3], train_input[:, 3:6], train_input[:, 6:]
                         predict_rssi = self.renderer.render_rssi(tx_o, rays_o, rays_d)
                         loss = img2mse(predict_rssi, train_label.view(-1))
+                    elif self.dataset_type == 'mimo':
+                        uplink, rays_o, rays_d = train_input[:, :52], train_input[:, 52:55], train_input[:, 55:]
+                        predict_downlink = self.renderer.render_csi(uplink, rays_o, rays_d)
+                        predict_downlink = torch.concat((predict_downlink.real, predict_downlink.imag), dim=-1)
+                        loss = img2mse(predict_downlink, train_label)
 
                     self.optimizer.zero_grad()
                     loss.backward()
@@ -236,14 +242,48 @@ class NeRF2_Runner():
 
 
 
+    def eval_network_csi(self):
+        """test the model and save predicted csi values to a file
+        """
+        self.logger.info("Start evaluation")
+        self.nerf2_network.eval()
+
+        n_bs = self.test_set.n_bs    # number of base station antennas
+        n_data = len(self.test_set)  # number of test data
+
+        all_pred_csi = torch.zeros((n_data, 26), dtype=torch.complex64)
+        all_gt_csi = torch.zeros((n_data, 26), dtype=torch.complex64)
+        with torch.no_grad():
+            for idx, (test_input, test_label) in enumerate(self.test_iter):
+                test_input, test_label = test_input.to(self.devices), test_label.to(self.devices)
+                uplink, rays_o, rays_d = test_input[:, :52], test_input[:, 52:55], test_input[:, 55:]
+                predict_downlink = self.renderer.render_csi(uplink, rays_o, rays_d)  # [B, 26]
+                gt_downlink = test_label[:, :26] + 1j * test_label[:, 26:]
+                predict_downlink = self.test_set.denormalize_csi(predict_downlink)
+                gt_downlink = self.test_set.denormalize_csi(gt_downlink)
+
+                all_pred_csi[idx*self.batch_size:(idx+1)*self.batch_size] = predict_downlink
+                all_gt_csi[idx*self.batch_size:(idx+1)*self.batch_size] = gt_downlink
+
+        all_pred_csi = rearrange(all_pred_csi, '(n_data n_bs) channel -> n_data n_bs channel', n_bs=n_bs)
+        all_gt_csi = rearrange(all_gt_csi, '(n_data n_bs) channel -> n_data n_bs channel', n_bs=n_bs)
+        snr = csi2snr(all_pred_csi, all_gt_csi)
+        self.logger.info("Median SNR:%.2f", torch.median(snr))
+
+        scio.savemat(os.path.join(self.logdir, self.expname, "result.mat"), {'pred_csi': all_pred_csi.cpu().numpy(),
+                                                                              'gt_csi': all_gt_csi.cpu().numpy(),
+                                                                              'snr': snr.cpu().numpy()})
+
+
+
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default='configs/ble-rssi.yml', help='config file path')
+    parser.add_argument('--config', type=str, default='configs/mimo-csi.yml', help='config file path')
     parser.add_argument('--gpu', type=int, default=0)
     parser.add_argument('--mode', type=str, default='train')
-    parser.add_argument('--dataset_type', type=str, default='ble')
+    parser.add_argument('--dataset_type', type=str, default='mimo')
     args = parser.parse_args()
     torch.cuda.set_device(args.gpu)
 
@@ -265,3 +305,5 @@ if __name__ == '__main__':
             worker.eval_network_spectrum()
         elif args.dataset_type == 'ble':
             worker.eval_network_rssi()
+        elif args.dataset_type == 'mimo':
+            worker.eval_network_csi()

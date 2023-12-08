@@ -35,8 +35,6 @@ networks:
   D: 8
   W: 256
   skips: [4]
-  is_embeded: True
-  multires_pts: 10
-  multires_view: 10
-  multires_tx: 10
-
+  multires: {'pts': 10, 'view': 10, 'tx': 10}
+  input_dims: {'pts': 3, 'view': 3, 'tx': 3}
+  is_embeded: {'pts': True, 'view': True, 'tx': True}

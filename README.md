@@ -16,6 +16,9 @@ Datasets and pretrained models are available at [Here](https://connectpolyu-my.s
 
 Datasets and pretrained models are available at [Here](https://connectpolyu-my.sharepoint.com/:f:/g/personal/20032132r_connect_polyu_hk/EuAACSdRP4VGgw_9n2IqL84BkY_tWD5TeE9kDT0lvjw6jw?e=ygYEvX).
 
+### MIMO CSI prediction
+
+Datasets and pretrained models are available at [Here](https://connectpolyu-my.sharepoint.com/:f:/g/personal/20032132r_connect_polyu_hk/EtAwvdaAdydKtXQCsiTPVfcBQcHuXIz8WWNsnuFULBD0CA?e=eKcins)
 
 
 ## Running
@@ -56,11 +59,27 @@ python nerf2_runner.py --mode test --config configs/ble-rssi.yml --dataset_type 
 python baseline/mri.py
 ```
 
+### CSI prediction
+
+**training the model**
+
+```bash
+python nerf2_runner.py --mode train --config configs/mimo-csi.yml --dataset_type mimo --gpu 0
+```
+
+**Inference the model**
+
+```bash
+python nerf2_runner.py --mode test --config configs/mimo-csi.yml --dataset_type mimo --gpu 0
+```
+
+
+
 
 
 ## To-Do List
 
-- [ ] NeRF2 for FDD MIMO channel prediction
+- [x] NeRF2 for FDD MIMO channel prediction
 - [ ] CGAN RSSI prediction baseline
 - [ ] Release more datasets
 - [ ] Instruction of preparing own datasets
