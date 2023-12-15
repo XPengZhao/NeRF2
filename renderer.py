@@ -244,7 +244,7 @@ class Renderer_CSI(Renderer):
 
 
     def render_csi(self, uplink, rays_o, rays_d):
-        """render the RSSI for each gateway. To avoid OOM, we split the rays into chunks
+        """render the RSSI for each gateway.
 
         Parameters
         ----------
@@ -253,26 +253,20 @@ class Renderer_CSI(Renderer):
         rays_d : tensor. [batchsize, 9x36x3]. The direction of rays
         """
 
-        batchsize, _ = uplink.shape
-        rays_d = rearrange(rays_d, 'b (v d) -> b v d', d=3)    # [batchsize, 9x36, 3]
-        chunks = 36
-        chunks_num = 36 // chunks
-        rays_o_chunk = repeat(rays_o, 'b d -> b c d', c=chunks) #[bs, cks, 3]
-        uplink_chunk = repeat(uplink, 'b d -> b c d', c=chunks)        #[bs, cks, 52]
-        recv_signal = torch.zeros([batchsize,26], dtype=torch.complex64).cuda()
-        for i in range(chunks_num):
-            rays_d_chunk = rays_d[:,i*chunks:(i+1)*chunks, :]  # [bs, cks, 3]
-            pts, t_vals = self.sample_points(rays_o_chunk, rays_d_chunk) # [bs, cks, pts, 3]
-            # views_chunk = rays_d_chunk[..., None, :].expand(pts.shape)  # [bs, cks, pts, 3]
-            views_chunks = repeat(rays_d_chunk, 'b v d -> b v p d', p=self.n_samples)  # [bs, cks, pts, 3]
-            uplink_chunks = repeat(uplink_chunk, 'b v d -> b v p d', p=self.n_samples)  # [bs, cks, pts, 3]
+        rays_d = rearrange(rays_d, 'b (v d) -> b v d', d=3)    # [bs, 9x36, 3]
+        batchsize, viewsize, _ = rays_d.shape
+        rays_o = repeat(rays_o, 'b d -> b v d', v=viewsize) #[bs, 9x36, 3]
+        uplink = repeat(uplink, 'b d -> b v d', v=viewsize)        #[bs, 9x36, 52]
 
-            # Run network and compute outputs
-            raw = self.network_fn(pts, views_chunks, uplink_chunks)    # [batchsize, chunks, n_samples, 4]
-            recv_signal_chunks = self.raw2outputs_signal(raw, t_vals, rays_d_chunk)  # [bs]
-            recv_signal += recv_signal_chunks
+        pts, t_vals = self.sample_points(rays_o, rays_d) # [bs, 9x36, pts, 3]
+        views = repeat(rays_d, 'b v d -> b v p d', p=self.n_samples)  # [bs, 9x36, pts, 3]
+        uplink = repeat(uplink, 'b v d -> b v p d', p=self.n_samples)  # [bs, cks, pts, 3]
 
-        return recv_signal    # [batchsize, 26]
+        # Run network and compute outputs
+        raw = self.network_fn(pts, views, uplink)    # [batchsize, 9x36, pts, 4]
+        recv_signal = self.raw2outputs_signal(raw, t_vals, rays_d)  # [bs, 26]
+
+        return recv_signal
 
 
     def raw2outputs_signal(self, raw, r_vals, rays_d):
@@ -286,7 +280,7 @@ class Renderer_CSI(Renderer):
 
         Return:
         ----------
-        receive_signal : [batchsize]. abs(singal of each ray)
+        receive_signal : [batchsize, 26]. OFDM singal of each ray
         """
         wavelength = sc.c / 2.4e9
         # raw2alpha = lambda raw, dists: 1.-torch.exp(-raw*dists)

@@ -144,16 +144,17 @@ class NeRF2_Runner():
                     if self.dataset_type == "rfid":
                         rays_o, rays_d, tx_o = train_input[:, :3], train_input[:, 3:6], train_input[:, 6:9]
                         predict_spectrum = self.renderer.render_ss(tx_o, rays_o, rays_d)
-                        loss = img2mse(predict_spectrum, train_label.view(-1))
+                        loss = sig2mse(predict_spectrum, train_label.view(-1))
                     elif self.dataset_type == 'ble':
                         tx_o, rays_o, rays_d = train_input[:, :3], train_input[:, 3:6], train_input[:, 6:]
                         predict_rssi = self.renderer.render_rssi(tx_o, rays_o, rays_d)
-                        loss = img2mse(predict_rssi, train_label.view(-1))
+                        loss = sig2mse(predict_rssi, train_label.view(-1))
                     elif self.dataset_type == 'mimo':
                         uplink, rays_o, rays_d = train_input[:, :52], train_input[:, 52:55], train_input[:, 55:]
                         predict_downlink = self.renderer.render_csi(uplink, rays_o, rays_d)
                         predict_downlink = torch.concat((predict_downlink.real, predict_downlink.imag), dim=-1)
-                        loss = img2mse(predict_downlink, train_label)
+                        loss = sig2mse(predict_downlink, train_label)
+
 
                     self.optimizer.zero_grad()
                     loss.backward()
