@@ -69,7 +69,6 @@ python nerf2_runner.py --mode test --config configs/mimo-csi.yml --dataset_type 
 
 ## To-Do List
 
-- [x] NeRF2 for FDD MIMO channel prediction
 - [ ] CGAN RSSI prediction baseline
 - [ ] Release more datasets
 - [ ] Instruction of preparing own datasets
