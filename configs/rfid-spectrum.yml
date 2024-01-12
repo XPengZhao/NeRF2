@@ -22,7 +22,7 @@ train:
   T_max: 10000
   eta_min: 1e-6
   batch_size: 8192
-  total_iterations: 10000
+  total_iterations: 30000
   load_ckpt: True
 
   save_freq: 100
