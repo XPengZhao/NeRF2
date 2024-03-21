@@ -53,8 +53,8 @@ def split_dataset(datadir, ratio=0.8, dataset_type='rfid'):
         index = pd.read_csv(rssi_dir).index.values
         random.shuffle(index)
     elif dataset_type == "mimo":
-        csi_dir = os.path.join(datadir, 'csidata.pt')
-        index = [i for i in range(torch.load(csi_dir).shape[0])]
+        csi_dir = os.path.join(datadir, 'csidata.npy')
+        index = [i for i in range(np.load(csi_dir).shape[0])]
         random.shuffle(index)
 
     train_len = int(len(index) * ratio)
@@ -325,13 +325,11 @@ class CSI_dataset(Dataset):
         bs_rays_d = rearrange(bs_rays_d, 'n g c -> n (g c)') # [n_bs, n_rays, 3] --> [n_bs, n_rays*3]
 
         ## Load data
-        data_counter = 0
-        for idx in tqdm(self.dataset_index, total=len(self.dataset_index)):
+        for data_counter, idx in tqdm(enumerate(self.dataset_index), total=len(self.dataset_index)):
             bs_uplink = self.uplink[idx*self.n_bs: (idx+1)*self.n_bs]    # [n_bs, 52]
             bs_downlink = self.downlink[idx*self.n_bs: (idx+1)*self.n_bs]    # [n_bs, 52]
             nn_inputs[data_counter*self.n_bs: (data_counter+1)*self.n_bs] = torch.cat([bs_uplink, bs_ray_o, bs_rays_d], dim=-1) # [n_bs, 52+3+3*36*9]
             nn_labels[data_counter*self.n_bs: (data_counter+1)*self.n_bs]  = bs_downlink
-            data_counter += 1
         return nn_inputs, nn_labels
 
     def gen_rays_gateways(self):
