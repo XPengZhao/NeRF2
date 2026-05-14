@@ -4,7 +4,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from einops import rearrange
 
 # Misc
 img2mse = lambda x, y : torch.mean((x - y) ** 2)
@@ -26,35 +25,29 @@ class Embedder():
         self.create_embedding_fn()
 
     def create_embedding_fn(self):
-        embed_fns = []
         d = self.kwargs['input_dims']    # input dimension of gamma
-        out_dim = 0
-
-        if self.kwargs['include_input']:
-            embed_fns.append(lambda x : x)
-            out_dim += d
 
         max_freq = self.kwargs['max_freq_log2']    # L-1, 10-1 by default
         N_freqs = self.kwargs['num_freqs']         # L
-
 
         if self.kwargs['log_sampling']:
             freq_bands = 2.**torch.linspace(0., max_freq, steps=N_freqs)  #2^[0,1,...,L-1]
         else:
             freq_bands = torch.linspace(2.**0., 2.**max_freq, steps=N_freqs)
 
-        for freq in freq_bands:
-            for p_fn in self.kwargs['periodic_fns']:
-                embed_fns.append(lambda x, p_fn=p_fn, freq=freq: p_fn(x * freq))
-                out_dim += d
-
-        self.embed_fns = embed_fns
-        self.out_dim = out_dim
+        self.freq_bands = freq_bands
+        self.include_input = self.kwargs['include_input']
+        self.out_dim = d * (int(self.include_input) + 2 * N_freqs)
 
     def embed(self, inputs):
         """return: gamma(input)
         """
-        return torch.cat([fn(inputs) for fn in self.embed_fns], -1)
+        freq_bands = self.freq_bands.to(device=inputs.device, dtype=inputs.dtype)
+        scaled = inputs[..., None, :] * freq_bands.view(*([1] * (inputs.dim() - 1)), -1, 1)
+        encoded = torch.stack((torch.sin(scaled), torch.cos(scaled)), dim=-2).flatten(-3)
+        if self.include_input:
+            encoded = torch.cat([inputs, encoded], dim=-1)
+        return encoded
 
 
 
@@ -119,6 +112,8 @@ class NeRF2(nn.Module):
         self.embed_pts_fn, input_pts_dim = get_embedder(multires['pts'], is_embeded['pts'], input_dims['pts'])
         self.embed_view_fn, input_view_dim = get_embedder(multires['view'], is_embeded['view'], input_dims['view'])
         self.embed_tx_fn, input_tx_dim = get_embedder(multires['tx'], is_embeded['tx'], input_dims['tx'])
+        self.input_view_dim = input_view_dim
+        self.input_tx_dim = input_tx_dim
 
         ## attenuation network
         self.attenuation_linears = nn.ModuleList(
@@ -138,6 +133,26 @@ class NeRF2(nn.Module):
         self.feature_layer = nn.Linear(W, W)
         self.signal_output = nn.Linear(W//2, sig_output_dims)
 
+    @staticmethod
+    def _expand_to_points(encoded, point_shape):
+        while encoded.dim() - 1 < len(point_shape):
+            encoded = encoded.unsqueeze(-2)
+        return encoded.expand(*point_shape, encoded.shape[-1])
+
+    def _first_signal_layer(self, feature, view, tx, point_shape):
+        layer = self.signal_linears[0]
+        feature_dim = feature.shape[-1]
+        feature_w, view_w, tx_w = torch.split(
+            layer.weight,
+            [feature_dim, self.input_view_dim, self.input_tx_dim],
+            dim=1
+        )
+
+        x = F.linear(feature, feature_w, layer.bias).view(*point_shape, -1)
+        view = self._expand_to_points(F.linear(view, view_w), point_shape)
+        tx = self._expand_to_points(F.linear(tx, tx_w), point_shape)
+        return (x + view + tx).reshape(-1, x.shape[-1])
+
 
     def forward(self, pts, view, tx):
         """forward function of the model
@@ -145,22 +160,21 @@ class NeRF2(nn.Module):
         Parameters
         ----------
         pts: [batchsize, n_samples, 3], position of voxels
-        view: [batchsize, n_samples, 3], view direction
-        tx: [batchsize, n_samples, 3], position of transmitter
+        view: [batchsize, 3] or [batchsize, n_samples, 3], view direction
+        tx: [batchsize, 3] or [batchsize, n_samples, 3], transmitter/uplink feature
 
         Returns
         ----------
         outputs: [batchsize, n_samples, 4].   attn_amp, attn_phase, signal_amp, signal_phase
         """
 
+        point_shape = pts.shape[:-1]
+
         # position encoding
         pts = self.embed_pts_fn(pts).contiguous()
-        view = self.embed_view_fn(view).contiguous()
-        tx = self.embed_tx_fn(tx).contiguous()
-        shape = pts.shape
-        pts = pts.view(-1, list(pts.shape)[-1])
-        view = view.view(-1, list(view.shape)[-1])
-        tx = tx.view(-1, list(tx.shape)[-1])
+        view = self.embed_view_fn(view)
+        tx = self.embed_tx_fn(tx)
+        pts = pts.reshape(-1, pts.shape[-1])
 
         x = pts
         for i, layer in enumerate(self.attenuation_linears):
@@ -170,11 +184,11 @@ class NeRF2(nn.Module):
 
         attn = self.attenuation_output(x)    # (batch_size, 2)
         feature = self.feature_layer(x)
-        x = torch.cat([feature, view, tx], -1)
 
-        for i, layer in enumerate(self.signal_linears):
+        x = F.relu(self._first_signal_layer(feature, view, tx, point_shape))
+        for layer in self.signal_linears[1:]:
             x = F.relu(layer(x))
         signal = self.signal_output(x)    #[batchsize, n_samples, 2]
 
         outputs = torch.cat([attn, signal], -1).contiguous()    # [batchsize, n_samples, 4]
-        return outputs.view(shape[:-1]+outputs.shape[-1:])
+        return outputs.view(*point_shape, outputs.shape[-1])

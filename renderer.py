@@ -5,7 +5,7 @@ import torch
 import numpy as np
 import torch.nn.functional as F
 import scipy.constants as sc
-from einops import rearrange, repeat
+from einops import rearrange
 
 
 class Renderer():
@@ -80,12 +80,8 @@ class Renderer_spectrum(Renderer):
         # sample points along rays
         pts, t_vals = self.sample_points(rays_o, rays_d)
 
-        # Expand views and tx to match the shape of pts
-        view = rays_d[:, None].expand(pts.shape)
-        tx = tx[:, None].expand(pts.shape)
-
         # Run network and compute outputs
-        raw = self.network_fn(pts, view, tx)    # [batchsize, n_samples, 4]
+        raw = self.network_fn(pts, rays_d, tx)    # [batchsize, n_samples, 4]
         receive_ss = self.raw2outputs(raw, t_vals, rays_d)  # [batchsize]
 
         return receive_ss
@@ -168,16 +164,13 @@ class Renderer_RSSI(Renderer):
         chunks = 36
         chunks_num = 36 // chunks
         rays_o_chunk = rays_o.expand(chunks, -1, -1).permute(1,0,2) #[bs, cks, 3]
-        tags_chunk = tx.expand(chunks, -1, -1).permute(1,0,2)        #[bs, cks, 3]
         recv_signal = torch.zeros(batchsize).cuda()
         for i in range(chunks_num):
             rays_d_chunk = rays_d[:,i*chunks:(i+1)*chunks, :]  # [bs, cks, 3]
             pts, t_vals = self.sample_points(rays_o_chunk, rays_d_chunk) # [bs, cks, pts, 3]
-            views_chunk = rays_d_chunk[..., None, :].expand(pts.shape)  # [bs, cks, pts, 3]
-            tx_chunk = tags_chunk[..., None, :].expand(pts.shape)  # [bs, cks, pts, 3]
 
             # Run network and compute outputs
-            raw = self.network_fn(pts, views_chunk, tx_chunk)    # [batchsize, chunks, n_samples, 4]
+            raw = self.network_fn(pts, rays_d_chunk, tx)    # [batchsize, chunks, n_samples, 4]
             recv_signal_chunks = self.raw2outputs_signal(raw, t_vals, rays_d_chunk)  # [bs]
             recv_signal += recv_signal_chunks
 
@@ -255,15 +248,12 @@ class Renderer_CSI(Renderer):
 
         rays_d = rearrange(rays_d, 'b (v d) -> b v d', d=3)    # [bs, 9x36, 3]
         batchsize, viewsize, _ = rays_d.shape
-        rays_o = repeat(rays_o, 'b d -> b v d', v=viewsize) #[bs, 9x36, 3]
-        uplink = repeat(uplink, 'b d -> b v d', v=viewsize)        #[bs, 9x36, 52]
+        rays_o = rays_o[:, None, :].expand(batchsize, viewsize, 3) #[bs, 9x36, 3]
 
         pts, t_vals = self.sample_points(rays_o, rays_d) # [bs, 9x36, pts, 3]
-        views = repeat(rays_d, 'b v d -> b v p d', p=self.n_samples)  # [bs, 9x36, pts, 3]
-        uplink = repeat(uplink, 'b v d -> b v p d', p=self.n_samples)  # [bs, cks, pts, 3]
 
         # Run network and compute outputs
-        raw = self.network_fn(pts, views, uplink)    # [batchsize, 9x36, pts, 4]
+        raw = self.network_fn(pts, rays_d, uplink)    # [batchsize, 9x36, pts, 4]
         recv_signal = self.raw2outputs_signal(raw, t_vals, rays_d)  # [bs, 26]
 
         return recv_signal
