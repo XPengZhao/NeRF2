@@ -76,6 +76,9 @@ class NeRF2_Runner():
         self.batch_size = kwargs_train['batch_size']
         self.total_iterations = kwargs_train['total_iterations']
         self.save_freq = kwargs_train['save_freq']
+        self.num_workers = kwargs_train.get('num_workers', 0)
+        self.pin_memory = kwargs_train.get('pin_memory', False)
+        self.prefetch_factor = kwargs_train.get('prefetch_factor', 2)
 
         ## Dataset
         dataset = dataset_dict[dataset_type]
@@ -88,8 +91,17 @@ class NeRF2_Runner():
         self.logger.info("Loading test set...")
         self.test_set = dataset(self.datadir, test_index, self.scale_worldsize)
 
-        self.train_iter = DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True, num_workers=0)
-        self.test_iter = DataLoader(self.test_set, batch_size=self.batch_size, shuffle=False, num_workers=0)
+        loader_kwargs = {
+            'batch_size': self.batch_size,
+            'num_workers': self.num_workers,
+            'pin_memory': self.pin_memory,
+        }
+        if self.num_workers > 0:
+            loader_kwargs['persistent_workers'] = True
+            loader_kwargs['prefetch_factor'] = self.prefetch_factor
+
+        self.train_iter = DataLoader(self.train_set, shuffle=True, **loader_kwargs)
+        self.test_iter = DataLoader(self.test_set, shuffle=False, **loader_kwargs)
         self.logger.info("Train set size:%d, Test set size:%d", len(self.train_set), len(self.test_set))
 
 
@@ -140,7 +152,8 @@ class NeRF2_Runner():
                     if self.current_iteration > self.total_iterations:
                         break
 
-                    train_input, train_label = train_input.to(self.devices), train_label.to(self.devices)
+                    train_input = train_input.to(self.devices, non_blocking=self.pin_memory)
+                    train_label = train_label.to(self.devices, non_blocking=self.pin_memory)
                     if self.dataset_type == "rfid":
                         rays_o, rays_d, tx_o = train_input[:, :3], train_input[:, 3:6], train_input[:, 6:9]
                         predict_spectrum = self.renderer.render_ss(tx_o, rays_o, rays_d)

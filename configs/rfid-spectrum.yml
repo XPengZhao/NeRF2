@@ -22,6 +22,9 @@ train:
   T_max: 10000
   eta_min: 1e-6
   batch_size: 8192
+  num_workers: 4
+  pin_memory: True
+  prefetch_factor: 2
   total_iterations: 30000
   load_ckpt: True
 
