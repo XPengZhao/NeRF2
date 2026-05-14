@@ -24,6 +24,7 @@ class Renderer():
         self.n_samples = kwargs['n_samples']
         self.near = kwargs['near']
         self.far = kwargs['far']
+        self._t_vals_cache = {}
 
 
     def sample_points(self, rays_o, rays_d):
@@ -39,11 +40,14 @@ class Renderer():
         pts : tensor. [n_rays, n_samples, 3]. The sampled points along rays
         t_vals : tensor. [n_rays, n_samples]. The distance from origin to each sampled point
         """
-        shape = list(rays_o.shape)
-        shape[-1] = 1
-        near, far = torch.full(shape, self.near), torch.full(shape, self.far)
-        t_vals = torch.linspace(0., 1., steps=self.n_samples) * (far - near) + near  # scale t with near and far
-        t_vals = t_vals.to(rays_o.device)
+        cache_key = (rays_o.device, rays_o.dtype)
+        if cache_key not in self._t_vals_cache:
+            self._t_vals_cache[cache_key] = torch.linspace(
+                self.near, self.far, steps=self.n_samples,
+                device=rays_o.device, dtype=rays_o.dtype
+            )
+        t_vals = self._t_vals_cache[cache_key]
+        t_vals = t_vals.expand(*rays_o.shape[:-1], self.n_samples)
         pts = rays_o[...,None,:] + rays_d[...,None,:] * t_vals[...,:,None] # p = o + td, [n_rays, n_samples, 3]
 
         return pts, t_vals
@@ -107,7 +111,7 @@ class Renderer_spectrum(Renderer):
         raw2phase = lambda raw, dists: raw*dists
 
         dists = r_vals[...,1:] - r_vals[...,:-1]
-        dists = torch.cat([dists, torch.Tensor([1e10]).cuda().expand(dists[...,:1].shape)], -1)  # [N_rays, N_samples]
+        dists = torch.cat([dists, dists.new_full(dists[..., :1].shape, 1e10)], -1)  # [N_rays, N_samples]
         dists = dists * torch.norm(rays_d[...,None,:], dim=-1)
 
         att_a, att_p, s_a, s_p = raw[...,0], raw[...,1], raw[...,2], raw[...,3]    # [N_rays, N_samples]
@@ -118,11 +122,10 @@ class Renderer_spectrum(Renderer):
         alpha = raw2alpha(att_a, dists)  # [N_rays, N_samples]
         phase = raw2phase(att_p, dists)
 
-        att_i = torch.cumprod(torch.cat([torch.ones((alpha.shape[0], 1)).cuda(), 1.-alpha + 1e-10], -1), -1)[:, :-1]
-        path = torch.cat([r_vals[...,1:], torch.Tensor([1e10]).cuda().expand(r_vals[...,:1].shape)], -1)
+        att_i = torch.cumprod(torch.cat([alpha.new_ones(alpha[..., :1].shape), 1.-alpha + 1e-10], -1), -1)[:, :-1]
+        path = torch.cat([r_vals[...,1:], r_vals.new_full(r_vals[..., :1].shape, 1e10)], -1)
         path_loss = 0.025 / path
-        # phase_i = torch.cumprod(torch.cat([torch.ones((alpha.shape[0], 1)), phase], -1), -1)[:, :-1]
-        phase_i = torch.cumsum(torch.cat([torch.ones((alpha.shape[0], 1)).cuda(), phase], -1), -1)[:, :-1]
+        phase_i = torch.cumsum(torch.cat([phase.new_ones(phase[..., :1].shape), phase], -1), -1)[:, :-1]
         phase_i = torch.exp(1j*phase_i)    # [N_rays, N_samples]
 
 
@@ -164,7 +167,7 @@ class Renderer_RSSI(Renderer):
         chunks = 36
         chunks_num = 36 // chunks
         rays_o_chunk = rays_o.expand(chunks, -1, -1).permute(1,0,2) #[bs, cks, 3]
-        recv_signal = torch.zeros(batchsize).cuda()
+        recv_signal = rays_o.new_zeros(batchsize)
         for i in range(chunks_num):
             rays_d_chunk = rays_d[:,i*chunks:(i+1)*chunks, :]  # [bs, cks, 3]
             pts, t_vals = self.sample_points(rays_o_chunk, rays_d_chunk) # [bs, cks, pts, 3]
@@ -197,7 +200,7 @@ class Renderer_RSSI(Renderer):
         raw2amp = lambda raw, dists: -raw*dists
 
         dists = r_vals[...,1:] - r_vals[...,:-1]
-        dists = torch.cat([dists, torch.Tensor([1e10]).cuda().expand(dists[...,:1].shape)], -1)  # [batchsize, chunks, n_samples]
+        dists = torch.cat([dists, dists.new_full(dists[..., :1].shape, 1e10)], -1)  # [batchsize, chunks, n_samples]
         dists = dists * torch.norm(rays_d[...,None,:], dim=-1)  # [batchsize,chunks, n_samples, 3].
 
         att_a, att_p, s_a, s_p = raw[...,0], raw[...,1], raw[...,2], raw[...,3]    # [batchsize,chunks, N_samples]
@@ -207,8 +210,6 @@ class Renderer_RSSI(Renderer):
         amp = raw2amp(att_a, dists)  # [batchsize,chunks, N_samples]
         phase = raw2phase(att_p, dists)
 
-        # att_i = torch.cumprod(torch.cat([torch.ones((al_shape[:-1], 1)), 1.-alpha + 1e-10], -1), -1)[:, :-1]
-        # phase_i = torch.cumprod(torch.cat([torch.ones((alpha.shape[0], 1)), phase], -1), -1)[:, :-1]
         amp_i = torch.exp(torch.cumsum(amp, -1))            # [batchsize,chunks, N_samples]
         phase_i = torch.exp(1j*torch.cumsum(phase, -1))                # [batchsize,chunks, N_samples]
 
@@ -279,7 +280,7 @@ class Renderer_CSI(Renderer):
         raw2amp = lambda raw, dists: -raw*dists
 
         dists = r_vals[...,1:] - r_vals[...,:-1]
-        dists = torch.cat([dists, torch.Tensor([1e10]).cuda().expand(dists[...,:1].shape)], -1)  # [batchsize, chunks, n_samples]
+        dists = torch.cat([dists, dists.new_full(dists[..., :1].shape, 1e10)], -1)  # [batchsize, chunks, n_samples]
         dists = dists * torch.norm(rays_d[...,None,:], dim=-1)  # [batchsize,chunks, n_samples, 3].
 
         att_a, att_p, s_a, s_p = raw[...,:26], raw[...,26:52], raw[...,52:78], raw[...,78:104]    # [batchsize,chunks, N_samples]
@@ -291,8 +292,6 @@ class Renderer_CSI(Renderer):
         amp = raw2amp(att_a, dists)  # [batchsize,chunks, N_samples, 26]
         phase = raw2phase(att_p, dists)
 
-        # att_i = torch.cumprod(torch.cat([torch.ones((al_shape[:-1], 1)), 1.-alpha + 1e-10], -1), -1)[:, :-1]
-        # phase_i = torch.cumprod(torch.cat([torch.ones((alpha.shape[0], 1)), phase], -1), -1)[:, :-1]
         amp_i = torch.exp(torch.cumsum(amp, -2))            # [batchsize,chunks, N_samples, 26]
         phase_i = torch.exp(1j*torch.cumsum(phase, -2))                # [batchsize,chunks, N_samples 26]
 
