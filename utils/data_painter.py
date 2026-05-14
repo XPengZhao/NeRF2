@@ -49,6 +49,31 @@ def paint_spectrum_compare(pred_spectrum, gt_spectrum, save_path=None):
     plt.close()
 
 
+class SpectrumComparePainter:
+
+    def __init__(self, shape=(90, 360), cmap='viridis', dpi=300):
+        r, theta = _polar_grid(*shape)
+        zeros = np.zeros(shape, dtype=np.float32)
+        self.dpi = dpi
+        self.fig, self.axs = plt.subplots(1, 2, subplot_kw={'projection': 'polar'}, figsize=(12, 6))
+        self.pred_mesh = self.axs[0].pcolormesh(theta, r, zeros.T, cmap=cmap, shading='flat')
+        self.gt_mesh = self.axs[1].pcolormesh(theta, r, zeros.T, cmap=cmap, shading='flat')
+        for ax in self.axs:
+            ax.axis('off')
+
+    def save(self, pred_spectrum, gt_spectrum, save_path):
+        pred_spectrum = np.flipud(pred_spectrum).T
+        gt_spectrum = np.flipud(gt_spectrum).T
+        self.pred_mesh.set_array(pred_spectrum.ravel())
+        self.gt_mesh.set_array(gt_spectrum.ravel())
+        self.pred_mesh.set_clim(np.min(pred_spectrum), np.max(pred_spectrum))
+        self.gt_mesh.set_clim(np.min(gt_spectrum), np.max(gt_spectrum))
+        self.fig.savefig(save_path, dpi=self.dpi, bbox_inches='tight', transparent=True)
+
+    def close(self):
+        plt.close(self.fig)
+
+
 def paint_location(loc_path, save_path):
 
 

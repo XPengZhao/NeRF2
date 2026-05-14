@@ -22,7 +22,7 @@ import scipy.io as scio
 from dataloader import *
 from model import *
 from renderer import renderer_dict
-from utils.data_painter import paint_spectrum_compare
+from utils.data_painter import SpectrumComparePainter
 from utils.logger import logger_config
 
 
@@ -196,33 +196,37 @@ class NeRF2_Runner():
         pred2next, gt2next = torch.zeros((0)), torch.zeros((0))
         save_img_idx = 0
         all_ssim = []
+        spectrum_painter = SpectrumComparePainter()
         with torch.no_grad():
-            for test_input, test_label in self.test_iter:
-                test_input, test_label = test_input.to(self.devices), test_label.to(self.devices)
-                rays_o, rays_d, tx_o = test_input[:, :3], test_input[:, 3:6], test_input[:, 6:9]
-                pred_spectrum = self.renderer.render_ss(tx_o, rays_o, rays_d)
+            try:
+                for test_input, test_label in self.test_iter:
+                    test_input, test_label = test_input.to(self.devices), test_label.to(self.devices)
+                    rays_o, rays_d, tx_o = test_input[:, :3], test_input[:, 3:6], test_input[:, 6:9]
+                    pred_spectrum = self.renderer.render_ss(tx_o, rays_o, rays_d)
 
 
-                ## save predicted spectrum
-                pred_spectrum = pred_spectrum.detach().cpu()
-                gt_spectrum = test_label.detach().cpu()
-                pred_spectrum = torch.concatenate((pred2next, pred_spectrum), dim=0)
-                gt_spectrum = torch.concatenate((gt2next, gt_spectrum), dim=0)
-                num_spectrum = len(pred_spectrum) // (360 * 90)
-                pred2next = pred_spectrum[num_spectrum*360*90:]
-                gt2next = gt_spectrum[num_spectrum*360*90:]
+                    ## save predicted spectrum
+                    pred_spectrum = pred_spectrum.detach().cpu()
+                    gt_spectrum = test_label.detach().cpu()
+                    pred_spectrum = torch.concatenate((pred2next, pred_spectrum), dim=0)
+                    gt_spectrum = torch.concatenate((gt2next, gt_spectrum), dim=0)
+                    num_spectrum = len(pred_spectrum) // (360 * 90)
+                    pred2next = pred_spectrum[num_spectrum*360*90:]
+                    gt2next = gt_spectrum[num_spectrum*360*90:]
 
-                for i in range(num_spectrum):
-                    pred_sepctrum_i = pred_spectrum[i*360*90:(i+1)*360*90].numpy().reshape(90, 360)
-                    gt_spectrum_i = gt_spectrum[i*360*90:(i+1)*360*90].numpy().reshape(90, 360)
-                    pixel_error = np.mean(abs(pred_sepctrum_i - gt_spectrum_i))
-                    ssim_i = ssim(pred_sepctrum_i, gt_spectrum_i, data_range=1, multichannel=False)
-                    self.logger.info("Spectrum {:d}, Mean pixel error = {:.6f}; SSIM = {:.6f}".format(save_img_idx, pixel_error, ssim_i))
-                    paint_spectrum_compare(pred_sepctrum_i, gt_spectrum_i,save_path=os.path.join(self.logdir, self.expname,'pred_spectrum', f'{save_img_idx}.png'))
-                    all_ssim.append(ssim_i)
-                    self.logger.info("Median SSIM is {:.6f}".format(np.median(all_ssim)))
-                    save_img_idx += 1
-                    np.savetxt(os.path.join(self.logdir, self.expname, 'all_ssim.txt'), all_ssim, fmt='%.4f')
+                    for i in range(num_spectrum):
+                        pred_sepctrum_i = pred_spectrum[i*360*90:(i+1)*360*90].numpy().reshape(90, 360)
+                        gt_spectrum_i = gt_spectrum[i*360*90:(i+1)*360*90].numpy().reshape(90, 360)
+                        pixel_error = np.mean(abs(pred_sepctrum_i - gt_spectrum_i))
+                        ssim_i = ssim(pred_sepctrum_i, gt_spectrum_i, data_range=1, multichannel=False)
+                        self.logger.info("Spectrum {:d}, Mean pixel error = {:.6f}; SSIM = {:.6f}".format(save_img_idx, pixel_error, ssim_i))
+                        spectrum_painter.save(pred_sepctrum_i, gt_spectrum_i, save_path=os.path.join(self.logdir, self.expname,'pred_spectrum', f'{save_img_idx}.png'))
+                        all_ssim.append(ssim_i)
+                        self.logger.info("Median SSIM is {:.6f}".format(np.median(all_ssim)))
+                        save_img_idx += 1
+                        np.savetxt(os.path.join(self.logdir, self.expname, 'all_ssim.txt'), all_ssim, fmt='%.4f')
+            finally:
+                spectrum_painter.close()
 
 
 
