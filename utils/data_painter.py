@@ -5,17 +5,24 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
+_POLAR_GRID_CACHE = {}
+
+
+def _polar_grid(n_elevation=90, n_azimuth=360):
+    key = (n_elevation, n_azimuth)
+    if key not in _POLAR_GRID_CACHE:
+        r = np.linspace(0, 1, n_elevation + 1)
+        theta = np.linspace(0, 2.*np.pi, n_azimuth + 1)
+        _POLAR_GRID_CACHE[key] = np.meshgrid(r, theta)
+    return _POLAR_GRID_CACHE[key]
+
 
 def paint_spectrum(spectrum, save_path=None):
 
     spectrum = spectrum.numpy().reshape(90, 360)
     plt.imsave(save_path, spectrum, cmap='jet')
     spectrum = np.flipud(spectrum)
-    # create a polar grid
-    r = np.linspace(0, 1, 91) # change this depending on your radial distance
-    theta = np.linspace(0, 2.*np.pi, 361)
-
-    r, theta = np.meshgrid(r, theta)
+    r, theta = _polar_grid(*spectrum.shape)
 
     fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
     cax = ax.pcolormesh(theta, r, spectrum.T, cmap='jet', shading='flat')
@@ -27,11 +34,7 @@ def paint_spectrum(spectrum, save_path=None):
 
 def paint_spectrum_compare(pred_spectrum, gt_spectrum, save_path=None):
 
-    # create a polar grid
-    r = np.linspace(0, 1, 91) # change this depending on your radial distance
-    theta = np.linspace(0, 2.*np.pi, 361)
-
-    r, theta = np.meshgrid(r, theta)
+    r, theta = _polar_grid(*pred_spectrum.shape)
 
     fig, axs = plt.subplots(1, 2, subplot_kw={'projection': 'polar'}, figsize=(12, 6))
 
