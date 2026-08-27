@@ -86,7 +86,7 @@ python nerf2_runner.py --mode test --config configs/mimo-csi.yml --dataset_type 
 
 - [ ] CGAN RSSI prediction baseline
 - [ ] Release more datasets
-- [ ] Instruction of preparing own datasets
+- [x] [Instruction of preparing own datasets](dataset_tools/README.md)
 - [ ] Implementation on Taichi to speed up the code
 
 
@@ -114,4 +114,3 @@ If you find the repository is helpful to your project, please cite as follows:
 ## Acknowledgment
 
 Some code snippets are borrowed from [nerf-pytorch](https://github.com/yenchenlin/nerf-pytorch) and [NeuS](https://github.com/Totoro97/NeuS).
-
